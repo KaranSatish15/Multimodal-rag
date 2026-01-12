@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 
 export default function Chat() {
@@ -11,6 +11,34 @@ export default function Chat() {
   const [images, setImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [localInput, setLocalInput] = useState<string>('');
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = window.localStorage.getItem('chat-theme');
+    const initial = stored === 'light' || stored === 'dark' ? stored : 'dark';
+    setTheme(initial);
+    if (initial === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+      window.localStorage.setItem('chat-theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      window.localStorage.setItem('chat-theme', 'light');
+    }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -35,11 +63,33 @@ export default function Chat() {
     e.preventDefault();
     if (!localInput.trim() && images.length === 0) return;
 
-    // Build the user message and append locally
+    // Build the user message and append locally (supporting multimodal content)
+    const baseId = Date.now();
+    let content: any = localInput;
+
+    if (images.length > 0) {
+      const imageParts = images.map((image) => ({
+        type: 'image_url',
+        image_url: { url: image },
+      }));
+
+      const textParts =
+        localInput.trim().length > 0
+          ? [
+              {
+                type: 'text',
+                text: localInput.trim(),
+              },
+            ]
+          : [];
+
+      content = [...textParts, ...imageParts];
+    }
+
     const userMessage = {
-      id: `user-${Date.now()}`,
+      id: `user-${baseId}`,
       role: 'user',
-      content: localInput,
+      content,
     };
     setLocalMessages((prev) => [...prev, userMessage]);
 
@@ -87,30 +137,9 @@ export default function Chat() {
         throw new Error(`API error: ${res.status} ${res.statusText} - ${errorText}`);
       }
 
-      if (!res.body) {
-        throw new Error('Response has no body stream');
-      }
-
-      // Add an empty assistant message that we'll populate as we stream
+      const assistantText = await res.text();
       const assistantId = `assistant-${Date.now()}`;
-      setLocalMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '' }]);
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let done = false;
-      let assistantText = '';
-
-      while (!done) {
-        const { value, done: d } = await reader.read();
-        done = !!d;
-        if (value) {
-          const decoded = decoder.decode(value, { stream: true });
-          console.log('Decoded chunk:', decoded.substring(0, 100));
-          assistantText += decoded;
-          // update last assistant message content
-          setLocalMessages((prev) => prev.map((m) => (m.id === assistantId ? { ...m, content: assistantText } : m)));
-        }
-      }
+      setLocalMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: assistantText }]);
     } catch (err: any) {
       console.error('Send failed:', err);
       console.error('Error stack:', err.stack);
@@ -121,21 +150,32 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 transition-colors duration-300">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            🤖 Multimodal RAG Chatbot
-          </h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Powered by Groq AI • RAG • Tool-Calling • Image Support
-          </p>
+      <header className="bg-white/80 dark:bg-slate-900/80 border-b border-slate-200/70 dark:border-slate-800/70 shadow-sm backdrop-blur">
+        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <span>🤖</span>
+              <span>FUSION AI</span>
+            </h1>
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+              Powered by Groq AI • RAG • Tool-Calling • Image Support
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="flex items-center gap-2 rounded-full border border-slate-300/70 dark:border-slate-600 bg-white/80 dark:bg-slate-800 px-3 py-1 text-xs font-medium shadow-sm hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+          >
+            <span className="text-lg">{theme === 'dark' ? '🌙' : '☀️'}</span>
+            <span className="hidden sm:inline">{theme === 'dark' ? 'Dark mode' : 'Light mode'}</span>
+          </button>
         </div>
       </header>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 bg-gray-50 dark:bg-gray-900">
+      <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="max-w-4xl mx-auto space-y-4">
           {error && (
             <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded mb-4">
@@ -232,13 +272,13 @@ export default function Chat() {
 
           {isLoading && (
             <div className="flex justify-start">
-              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-4 py-3">
+              <div className="bg-white/90 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 shadow-sm">
                 <div className="flex items-center gap-2">
                   <span className="text-lg">🤖</span>
                   <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
                   </div>
                 </div>
               </div>
@@ -249,7 +289,7 @@ export default function Chat() {
 
       {/* Image Preview */}
       {images.length > 0 && (
-        <div className="px-4 py-2 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+        <div className="px-4 py-2 bg-slate-100/80 dark:bg-slate-900/80 border-t border-slate-200 dark:border-slate-800 backdrop-blur">
           <div className="max-w-4xl mx-auto">
             <div className="flex gap-2 overflow-x-auto">
               {images.map((image, index) => (
@@ -275,7 +315,7 @@ export default function Chat() {
       )}
 
       {/* Input Form */}
-      <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+      <div className="bg-white/80 dark:bg-slate-900/80 border-t border-slate-200 dark:border-slate-800 backdrop-blur">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <form onSubmit={onSubmit} className="flex gap-2">
             <input
@@ -300,13 +340,13 @@ export default function Chat() {
                 setLocalInput(e.target.value);
               }}
               placeholder="Type your message... (supports images and tool-calling)"
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-white shadow-sm"
               disabled={isLoading}
             />
             <button
               type="submit"
               disabled={isLoading || (!localInput.trim() && images.length === 0)}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
             >
               Send
             </button>

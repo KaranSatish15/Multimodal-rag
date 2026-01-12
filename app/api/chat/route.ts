@@ -1,9 +1,5 @@
 import { NextRequest } from 'next/server';
-import { groq } from '@ai-sdk/groq';
-import { streamText, tool } from 'ai';
-import { z } from 'zod';
 import { getVectorStore, initializeRAG } from '@/lib/rag';
-import { executeTool, availableTools } from '@/lib/tools';
 
 // Initialize RAG on module load (optional - will fail gracefully if OpenAI quota exceeded)
 let ragInitialized = false;
@@ -33,10 +29,10 @@ export async function POST(req: NextRequest) {
       throw new Error('GROQ_API_KEY is not set');
     }
 
-    // Get the last user message
+    // Get the last user message and extract text for RAG
     const lastMessage = messages[messages.length - 1];
     let userQuery = '';
-    
+
     if (typeof lastMessage.content === 'string') {
       userQuery = lastMessage.content;
     } else if (Array.isArray(lastMessage.content)) {
@@ -58,72 +54,68 @@ export async function POST(req: NextRequest) {
     }
 
     // Build system prompt with RAG context (optional)
-    const systemPrompt = `You are a helpful AI assistant.${context ? ' You have access to a knowledge base through RAG (Retrieval-Augmented Generation).' : ''}
+    const systemPrompt = `You are a helpful AI assistant.${
+      context ? ' You have access to a knowledge base through RAG (Retrieval-Augmented Generation).' : ''
+    }
 
 ${context ? `Here is relevant context from the knowledge base:\n${context}\n\n` : ''}
 
-${context ? 'Use this context to provide accurate and helpful responses. If the context doesn\'t contain relevant information, you can use your general knowledge or available tools.' : 'Use your general knowledge and available tools to provide accurate and helpful responses.'}
+${
+  context
+    ? "Use this context to provide accurate and helpful responses. If the context doesn't contain relevant information, you can use your general knowledge."
+    : 'Use your general knowledge to provide accurate and helpful responses.'
+}
 
-You can process both text and images. When images are provided, describe what you see and answer questions about them.
+You can process both text and images. When images are provided, describe what you see and answer questions about them.`;
 
-Available tools:
-- web_search: Search the web for current information
-- get_current_date: Get the current date and time
-- calculate: Perform mathematical calculations
+    // Prepare messages for Groq API. Inject the system prompt as the first message.
+    const groqMessages = [
+      { role: 'system', content: systemPrompt },
+      ...messages,
+    ];
 
-Use tools when appropriate to provide the most helpful responses.`;
-
-    // Prepare messages for the model (already in correct format from useChat)
-    const modelMessages = messages;
-
-    // Create tool definitions for Groq (disabled for now - focusing on core streaming)
-    // const tools = { ... };
-
-    // Stream the response
-    const result = await streamText({
-      model: groq('llama3-70b-8192'), // Using stable Groq model (mixtral-8x7b-32768 was decommissioned)
-      system: systemPrompt,
-      messages: modelMessages,
-      // tools: tools,
+    // Call Groq chat.completions API directly with a multimodal-capable model
+    const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        messages: groqMessages,
+        stream: false,
+      }),
     });
 
-    // Log the result structure to diagnose the actual shape
-    const resultKeys = Object.getOwnPropertyNames(result);
-    const resultProto = Object.getPrototypeOf(result);
-    const protoKeys = resultProto ? Object.getOwnPropertyNames(resultProto) : [];
-    
-    console.log('=== streamText result debug ===');
-    console.log('result keys:', resultKeys);
-    console.log('result prototype keys:', protoKeys);
-    
-    // The StreamTextResult has convenience methods to convert to HTTP responses
-    // toTextStreamResponse() is the correct method to use
-    if (typeof (result as any).toTextStreamResponse === 'function') {
-      console.log('✓ Using toTextStreamResponse()');
-      return (result as any).toTextStreamResponse();
+    if (!groqResponse.ok) {
+      const errorText = await groqResponse.text();
+      throw new Error(`Groq API error: ${groqResponse.status} ${groqResponse.statusText} - ${errorText}`);
     }
 
-    // Fallback: try toDataStreamResponse
-    if (typeof (result as any).toDataStreamResponse === 'function') {
-      console.log('✓ Using toDataStreamResponse()');
-      return (result as any).toDataStreamResponse();
+    const data = await groqResponse.json();
+    const choice = data?.choices?.[0];
+    const content = choice?.message?.content;
+
+    let answer = '';
+
+    if (typeof content === 'string') {
+      answer = content;
+    } else if (Array.isArray(content)) {
+      // For multimodal responses, extract only the text parts
+      answer = content
+        .filter((part: any) => part.type === 'text')
+        .map((part: any) => part.text)
+        .join('');
     }
 
-    // Fallback: try textStream property  
-    if ((result as any).textStream) {
-      console.log('✓ Using textStream property');
-      return new Response((result as any).textStream, {
-        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      });
+    if (!answer) {
+      answer = 'I could not generate a response for this query.';
     }
 
-    // Fallback if the streaming shape is unexpected
-    console.error('❌ Could not find any stream method on result');
-    console.error('Result type:', result?.constructor?.name);
-    console.error('Result keys:', resultKeys);
-    return new Response(JSON.stringify({ error: 'Streaming not available from model result', debug: { resultKeys } }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
+    return new Response(answer, {
+      status: 200,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
     });
   } catch (error: any) {
     console.error('Chat API error:', error);
