@@ -58,7 +58,6 @@ export default function Chat() {
     setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!localInput.trim() && images.length === 0) return;
@@ -99,7 +98,10 @@ export default function Chat() {
     setLocalInput('');
 
     // Prepare payload for API: map messages to plain role/content
-    const payloadMessages = [...localMessages, userMessage].map((m) => ({ role: m.role, content: m.content }));
+    const payloadMessages = [...localMessages, userMessage].map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
 
     try {
       setIsLoading(true);
@@ -107,7 +109,7 @@ export default function Chat() {
 
       console.log('Sending chat request...', { messages: payloadMessages });
       console.log('Request body:', JSON.stringify({ messages: payloadMessages }));
-      
+
       let res;
       try {
         res = await fetch('/api/chat', {
@@ -139,7 +141,10 @@ export default function Chat() {
 
       const assistantText = await res.text();
       const assistantId = `assistant-${Date.now()}`;
-      setLocalMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: assistantText }]);
+      setLocalMessages((prev) => [
+        ...prev,
+        { id: assistantId, role: 'assistant', content: assistantText },
+      ]);
     } catch (err: any) {
       console.error('Send failed:', err);
       console.error('Error stack:', err.stack);
@@ -150,17 +155,21 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 transition-colors duration-300">
+    <div className="flex flex-col min-h-screen bg-neutral-50 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-50 transition-colors duration-300 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.16),_transparent_55%),radial-gradient(circle_at_bottom,_rgba(139,92,246,0.18),_transparent_55%)]">
       {/* Header */}
-      <header className="bg-white/80 dark:bg-slate-900/80 border-b border-slate-200/70 dark:border-slate-800/70 shadow-sm backdrop-blur">
+      <header className="border-b border-neutral-200/70 dark:border-neutral-800/70 bg-transparent">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <span>🤖</span>
+            <h1 className="text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-50 flex items-center gap-2">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-cyan-400 via-sky-400 to-violet-500 p-[1px] shadow-[0_0_12px_rgba(56,189,248,0.55)]">
+                <span className="flex h-full w-full items-center justify-center rounded-full bg-neutral-950 text-[0.6rem] font-semibold tracking-[0.08em] text-white dark:bg-neutral-50 dark:text-neutral-900">
+                  FA
+                </span>
+              </span>
               <span>FUSION AI</span>
             </h1>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-              Powered by Groq AI • RAG • Tool-Calling • Image Support
+            <p className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 mt-1">
+              Multimodal assistant with RAG, vision and tools
             </p>
           </div>
           <button
@@ -169,45 +178,27 @@ export default function Chat() {
             className="flex items-center gap-2 rounded-full border border-slate-300/70 dark:border-slate-600 bg-white/80 dark:bg-slate-800 px-3 py-1 text-xs font-medium shadow-sm hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
           >
             <span className="text-lg">{theme === 'dark' ? '🌙' : '☀️'}</span>
-            <span className="hidden sm:inline">{theme === 'dark' ? 'Dark mode' : 'Light mode'}</span>
+            <span className="hidden sm:inline">
+              {theme === 'dark' ? 'Dark mode' : 'Light mode'}
+            </span>
           </button>
         </div>
       </header>
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-6">
-        <div className="max-w-4xl mx-auto space-y-4">
+        <div className="max-w-3xl mx-auto space-y-4">
           {error && (
-            <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded mb-4">
-              <p className="font-semibold">Error:</p>
+            <div className="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded mb-4 text-sm">
+              <p className="font-semibold">Error</p>
               <p>{error.message || 'An error occurred. Please check your API keys and try again.'}</p>
             </div>
           )}
-          
+
           {localMessages.length === 0 && (
-            <div className="text-center py-12">
-              <div className="inline-block p-4 bg-blue-100 dark:bg-blue-900 rounded-full mb-4">
-                <svg
-                  className="w-12 h-12 text-blue-600 dark:text-blue-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-                  />
-                </svg>
-              </div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Welcome to the Multimodal RAG Chatbot
-              </h2>
-              <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
-                Ask me anything! I can process text and images, use RAG for context-aware responses,
-                and call tools when needed.
-              </p>
+            <div className="py-12 text-center text-sm text-neutral-500 dark:text-neutral-400">
+              <p className="mb-1">Start a conversation with Fusion AI.</p>
+              <p>Ask a question, paste some text, or upload an image to analyze.</p>
             </div>
           )}
 
@@ -217,34 +208,36 @@ export default function Chat() {
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[80%] rounded-lg px-4 py-3 ${
+                className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
                   message.role === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700'
+                    ? 'bg-gradient-to-tr from-cyan-500 via-sky-500 to-indigo-500 text-white dark:from-cyan-400 dark:via-sky-400 dark:to-violet-500'
+                    : 'bg-white/90 dark:bg-neutral-900/90 text-neutral-900 dark:text-neutral-50 border border-neutral-200/80 dark:border-neutral-800/80'
                 }`}
               >
                 {message.role === 'assistant' && (
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-2 text-xs text-neutral-500 dark:text-neutral-400">
                     <span className="text-lg">🤖</span>
-                    <span className="text-xs opacity-70">Assistant</span>
+                    <span>Assistant</span>
                   </div>
                 )}
-                {message.role === 'user' && Array.isArray(message.content) && message.content.some((c: any) => c.type === 'image_url') && (
-                  <div className="mb-2 space-y-2">
-                    {message.content
-                      .filter((c: any) => c.type === 'image_url')
-                      .map((item: any, idx: number) => (
-                        <Image
-                          key={idx}
-                          src={item.image_url?.url || ''}
-                          alt="Uploaded image"
-                          width={200}
-                          height={200}
-                          className="rounded-lg max-w-full h-auto"
-                        />
-                      ))}
-                  </div>
-                )}
+                {message.role === 'user' &&
+                  Array.isArray(message.content) &&
+                  message.content.some((c: any) => c.type === 'image_url') && (
+                    <div className="mb-2 space-y-2">
+                      {message.content
+                        .filter((c: any) => c.type === 'image_url')
+                        .map((item: any, idx: number) => (
+                          <Image
+                            key={idx}
+                            src={item.image_url?.url || ''}
+                            alt="Uploaded image"
+                            width={240}
+                            height={240}
+                            className="rounded-xl max-w-full h-auto border border-neutral-200 dark:border-neutral-800"
+                          />
+                        ))}
+                    </div>
+                  )}
                 <div className="whitespace-pre-wrap">
                   {typeof message.content === 'string'
                     ? message.content
@@ -272,13 +265,22 @@ export default function Chat() {
 
           {isLoading && (
             <div className="flex justify-start">
-              <div className="bg-white/90 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 shadow-sm">
+              <div className="bg-white/90 dark:bg-neutral-900/90 border border-neutral-200 dark:border-neutral-800 rounded-2xl px-4 py-3 shadow-sm">
                 <div className="flex items-center gap-2">
                   <span className="text-lg">🤖</span>
                   <div className="flex gap-1">
-                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                    <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    <div
+                      className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '0ms' }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '150ms' }}
+                    ></div>
+                    <div
+                      className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
+                      style={{ animationDelay: '300ms' }}
+                    ></div>
                   </div>
                 </div>
               </div>
@@ -299,7 +301,7 @@ export default function Chat() {
                     alt={`Preview ${index + 1}`}
                     width={100}
                     height={100}
-                    className="rounded-lg object-cover border-2 border-blue-500"
+                    className="rounded-lg object-cover border border-neutral-200 dark:border-neutral-700"
                   />
                   <button
                     onClick={() => removeImage(index)}
@@ -315,9 +317,12 @@ export default function Chat() {
       )}
 
       {/* Input Form */}
-      <div className="bg-white/80 dark:bg-slate-900/80 border-t border-slate-200 dark:border-slate-800 backdrop-blur">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          <form onSubmit={onSubmit} className="flex gap-2">
+      <div className="bg-neutral-50/90 dark:bg-neutral-950/90 border-t border-neutral-200 dark:border-neutral-900">
+        <div className="max-w-3xl mx-auto px-4 py-4">
+          <form
+            onSubmit={onSubmit}
+            className="flex items-center gap-2 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 px-3 py-2 shadow-sm"
+          >
             <input
               ref={fileInputRef}
               type="file"
@@ -329,7 +334,7 @@ export default function Chat() {
             />
             <label
               htmlFor="image-upload"
-              className="flex items-center justify-center px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg cursor-pointer transition-colors"
+              className="flex items-center justify-center px-3 py-2 rounded-xl cursor-pointer text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors"
               title="Upload images"
             >
               📷
@@ -339,20 +344,21 @@ export default function Chat() {
               onChange={(e) => {
                 setLocalInput(e.target.value);
               }}
-              placeholder="Type your message... (supports images and tool-calling)"
-              className="flex-1 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-800 dark:text-white shadow-sm"
+              placeholder="Ask anything..."
+              className="flex-1 px-2 py-1 border-none bg-transparent focus:outline-none focus:ring-0 text-sm placeholder:text-neutral-400 dark:placeholder:text-neutral-500"
               disabled={isLoading}
             />
             <button
               type="submit"
               disabled={isLoading || (!localInput.trim() && images.length === 0)}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+              className="inline-flex items-center justify-center rounded-xl bg-gradient-to-tr from-cyan-500 via-sky-500 to-violet-500 text-white px-3 py-1.5 text-sm font-medium shadow-[0_0_12px_rgba(56,189,248,0.55)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors hover:from-cyan-400 hover:via-sky-400 hover:to-violet-400"
             >
               Send
             </button>
           </form>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
-            💡 Tip: Upload images or ask questions that might benefit from web search, calculations, or current date
+            💡 Tip: Upload images or ask questions that might benefit from web search, calculations, or
+            current date
           </p>
         </div>
       </div>
